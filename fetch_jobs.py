@@ -18,7 +18,12 @@ TITLE_EXCLUDE = [
     "product manager", "recruiter", "account manager", "operations manager",
     "business development", "clinical", "medical", "legal", "supply chain",
     "sap", "google coe", "delivery lead", "reinsurance", "retail media",
-    "catastrophe", "real-world evidence", "radiolog", "nursing", "physician"
+    "catastrophe", "real-world evidence", "radiolog", "nursing", "physician",
+    "grc", "governance, risk", "risk and compliance", "security officer",
+    "information security", "cybersecurity", "ciso", "penetration",
+    "quant", "quantitative", "actuar", "underwr", "claims adjuster",
+    "product management", "customer success", "account executive",
+    "global systems integrator", "channel partner", "alliances"
 ]
 
 DOMAIN_KEYWORDS = [
