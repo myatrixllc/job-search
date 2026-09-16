@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install jobspy pandas python-dotenv
+           pip install python-jobspy pandas python-dotenv
 
       - name: Run job scraper and generate report
         run: python fetch_jobs.py
