@@ -48,10 +48,9 @@ def filter_by_title(title):
     is_excluded = any(kw in t for kw in TITLE_EXCLUDE)
     return has_level and not is_excluded
 
-
 def score_role(title, description):
     t = (title or "").lower()
-    d = (description or "").lower()
+    d = ("" if not isinstance(description, str) else description).lower()
     combined = t + " " + d
     return sum(1 for kw in DOMAIN_KEYWORDS if kw in combined)
 
