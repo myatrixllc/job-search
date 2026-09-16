@@ -24,7 +24,7 @@ TITLE_EXCLUDE = [
 
 TARGET_BASE = 240000
 BACKUP_MAX_FLOOR = 225000
-MIN_SCREEN_SCORE = 70
+MIN_SCREEN_SCORE = 45
 HIGH_SCREEN_SCORE = 90
 
 LEVEL_SCORES = {
@@ -206,8 +206,10 @@ def salary_val(row):
     return 0
 
 def salary_passes(row):
-    mx = row.get("max_amount")
-    return True if pd.isna(mx) else mx >= BACKUP_MAX_FLOOR
+    # Discovery should not eliminate an otherwise relevant role based on salary.
+    # Compensation is already incorporated into the screening score and remains
+    # visible in the report for the user to make the final decision.
+    return True
 
 def already_applied(company, title):
     company, title = (company or "").lower(), (title or "").lower()
@@ -339,7 +341,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     </div>
   </div>
 
-  <div class="notice">Screening score combines functional mandate, leadership scope, technical alignment, healthcare/domain fit, executive/business alignment, compensation and mismatch penalties. It is an automated prioritization score, not an interview probability. Roles with a known maximum salary below ${BACKUP_MAX_FLOOR:,} are excluded.</div>
+  <div class="notice">Screening score combines functional mandate, leadership scope, technical alignment, healthcare/domain fit, executive/business alignment, compensation and mismatch penalties. It is an automated prioritization score, not an interview probability. Compensation affects ranking but does not remove an otherwise relevant role.</div>
 
   <div class="ctrls">
     <div class="sw">
@@ -371,7 +373,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     <div class="empty" id="em">No roles match this filter.</div>
   </div>
 
-  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings scraped &nbsp;·&nbsp; {len(jobs_data)} relevant roles after filtering &nbsp;·&nbsp; Known max salary floor: ${BACKUP_MAX_FLOOR:,}</div>
+  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings scraped &nbsp;·&nbsp; {len(jobs_data)} relevant roles after filtering &nbsp;·&nbsp; Discovery floor: ${MIN_SCREEN_SCORE} screening points · Compensation used for ranking, not exclusion</div>
 </div>
 <script>
 const APPLIED={applied_js};
