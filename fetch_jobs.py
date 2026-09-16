@@ -14,9 +14,6 @@ TITLE_INCLUDE = [
     "executive director", "avp", "assistant vice president"
 ]
 
-# A role must have both executive seniority AND a target function in its title.
-# This prevents generic "Head of", VP Product, GRC, operational risk, etc.
-# from entering the scoring engine merely because the description contains data/AI terms.
 TARGET_TITLE_FUNCTIONS = [
     "data", "analytics", "artificial intelligence", " ai ", "ai/",
     "machine learning", "ml ", "software engineering", "engineering",
@@ -29,23 +26,17 @@ TITLE_EXCLUDE = [
     "account manager", "business development", "legal", "supply chain",
     "radiolog", "nursing", "physician", "claims adjuster", "customer success",
     "account executive", "channel partner", "alliances",
-
-    # Product-management roles are not part of the primary search.
     "product manager", "product management", "digital product",
-
-    # Security / risk / compliance leadership is outside the target mandate.
     "grc", "governance, risk", "risk and compliance", "operational risk",
     "security officer", "information security", "cybersecurity",
     "chief information security officer", "ciso", "penetration testing",
-
-    # Other recurring false-positive domains.
     "actuar", "underwr", "quantitative", "reinsurance", "retail media",
     "catastrophe", "real-world evidence", "google coe"
 ]
 
-TARGET_BASE = 240000
-BACKUP_MAX_FLOOR = 225000
-MIN_SCREEN_SCORE = 45
+TARGET_BASE       = 240000
+BACKUP_MAX_FLOOR  = 225000
+MIN_SCREEN_SCORE  = 45
 HIGH_SCREEN_SCORE = 90
 
 LEVEL_SCORES = {
@@ -84,7 +75,9 @@ LEADERSHIP_KEYWORDS = [
     "manage teams", "organization", "organizational leadership", "global team",
     "distributed team", "executive leadership", "senior leadership",
     "develop leaders", "mentor leaders", "budget", "portfolio", "investment",
-    "vendor", "strategic partner", "build-vs-buy", "build vs buy"
+    "vendor", "strategic partner", "build-vs-buy", "build vs buy",
+    "lead a team", "build organization", "grow a team", "build a team",
+    "hire and develop", "reporting to", "direct reports"
 ]
 
 TECH_KEYWORDS = [
@@ -139,10 +132,16 @@ PENALTY_GROUPS = {
 }
 
 APPLIED_ROLES = [
-    {"company": "McDonald's", "title": "Senior Director, Enterprise Architecture"},
-    {"company": "Vituity", "title": "Senior Director, Platform Engineering"},
-    {"company": "Experian", "title": "Senior Director, Platform Architecture"},
-    {"company": "Revecore", "title": "Senior Director, Enterprise Data Architecture"},
+    {"company": "McDonald's",   "title": "Senior Director, Enterprise Architecture"},
+    {"company": "Vituity",      "title": "Senior Director, Platform Engineering"},
+    {"company": "Experian",     "title": "Senior Director, Platform Architecture"},
+    {"company": "Revecore",     "title": "Senior Director, Enterprise Data Architecture"},
+    {"company": "WEX",          "title": "Senior Director, Semantic Data Platform"},
+    {"company": "TIAA",         "title": "Managing Director, Data Platform Engineering"},
+    {"company": "Optum",        "title": "Senior Director, Software Data Platform Engineer"},
+    {"company": "Abbott",       "title": "IT Director, Data & AI Architecture"},
+    {"company": "SCA Health",   "title": "Vice President, Data and Artificial Intelligence"},
+    {"company": "Devoted Health","title": "Senior Director, Interoperability"},
 ]
 
 # ─────────────────────────────────────────────
@@ -150,26 +149,24 @@ APPLIED_ROLES = [
 # ─────────────────────────────────────────────
 
 def filter_by_title(title):
-    if not title:
+    if not title or not isinstance(title, str):
         return False
-
-    # Padding helps short tokens such as " ai " avoid matching unrelated words.
     t = f" {title.lower().strip()} "
-
-    has_level = any(k in t for k in TITLE_INCLUDE)
+    has_level          = any(k in t for k in TITLE_INCLUDE)
     has_target_function = any(k in t for k in TARGET_TITLE_FUNCTIONS)
-    is_excluded = any(k in t for k in TITLE_EXCLUDE)
-
+    is_excluded        = any(k in t for k in TITLE_EXCLUDE)
     return has_level and has_target_function and not is_excluded
+
 
 def count_matches(text, keywords):
     return sum(1 for k in keywords if k in text)
 
+
 def score_role(title, description, min_salary=None, max_salary=None):
     title = (title or "").lower()
-    desc = description.lower() if isinstance(description, str) else ""
-    text = f"{title} {desc}"
-    c = {}
+    desc  = description.lower() if isinstance(description, str) else ""
+    text  = f"{title} {desc}"
+    c     = {}
 
     c["seniority"] = max(
         [pts for level, pts in LEVEL_SCORES.items() if level in title] or [0]
@@ -188,17 +185,17 @@ def score_role(title, description, min_salary=None, max_salary=None):
         c["function"], primary = 0, "Other / Unknown"
 
     c["leadership"] = min(15, count_matches(text, LEADERSHIP_KEYWORDS) * 3)
-    c["technical"] = min(15, round(count_matches(text, TECH_KEYWORDS) * 1.5))
-    c["domain"] = min(10, count_matches(text, HEALTHCARE_KEYWORDS) * 2)
-    c["business"] = min(10, count_matches(text, BUSINESS_KEYWORDS) * 2)
+    c["technical"]  = min(15, round(count_matches(text, TECH_KEYWORDS) * 1.5))
+    c["domain"]     = min(10, count_matches(text, HEALTHCARE_KEYWORDS) * 2)
+    c["business"]   = min(10, count_matches(text, BUSINESS_KEYWORDS) * 2)
 
     comp = 5
-    if pd.notna(max_salary):
-        if max_salary >= 280000: comp = 10
+    if max_salary is not None and pd.notna(max_salary):
+        if   max_salary >= 280000: comp = 10
         elif max_salary >= 260000: comp = 9
         elif max_salary >= 240000: comp = 8
         elif max_salary >= 225000: comp = 4
-        else: comp = 0
+        else:                      comp = 0
     c["compensation"] = comp
 
     penalties, penalty_total = [], 0
@@ -208,11 +205,12 @@ def score_role(title, description, min_salary=None, max_salary=None):
             penalty_total += penalty
 
     return {
-        "score": max(0, min(100, sum(c.values()) - penalty_total)),
+        "score":            max(0, min(100, sum(c.values()) - penalty_total)),
         "primary_function": primary,
-        "components": c,
-        "penalties": penalties,
+        "components":       c,
+        "penalties":        penalties,
     }
+
 
 def screening_tier(score):
     if score >= 95: return "A+ | REVIEW NOW"
@@ -220,12 +218,14 @@ def screening_tier(score):
     if score >= 87: return "B | SELECTIVE"
     return "C | BACKUP"
 
+
 def salary_str(row):
     mn, mx = row.get("min_amount"), row.get("max_amount")
     if pd.notna(mn) and pd.notna(mx): return f"${int(mn):,} – ${int(mx):,}"
-    if pd.notna(mn): return f"${int(mn):,}+"
-    if pd.notna(mx): return f"up to ${int(mx):,}"
+    if pd.notna(mn):  return f"${int(mn):,}+"
+    if pd.notna(mx):  return f"up to ${int(mx):,}"
     return "Not listed"
+
 
 def salary_val(row):
     mx, mn = row.get("max_amount"), row.get("min_amount")
@@ -233,16 +233,10 @@ def salary_val(row):
     if pd.notna(mn): return int(mn)
     return 0
 
+
 def salary_passes(row):
-    # Discovery should not eliminate an otherwise relevant role based on salary.
-    # Compensation is already incorporated into the screening score and remains
-    # visible in the report for the user to make the final decision.
     return True
 
-def already_applied(company, title):
-    company, title = (company or "").lower(), (title or "").lower()
-    return any(r["company"].lower() in company and r["title"].lower() in title
-               for r in APPLIED_ROLES)
 
 def clean_location(loc):
     if not isinstance(loc, str) or loc.strip().lower() in ("nan", ""):
@@ -328,6 +322,7 @@ tbody tr:hover{{background:var(--navy-l)}}
 .rt a{{color:var(--text);text-decoration:none}}
 .rt a:hover{{color:var(--navy);text-decoration:underline}}
 .co{{font-size:11.5px;color:var(--text2);margin-top:2px;font-weight:500}}
+.fn{{font-size:10px;color:var(--text3);margin-top:1px;font-style:italic}}
 .lo{{font-size:12px;color:var(--text2);white-space:nowrap}}
 .dt{{font-size:11.5px;color:var(--text3);white-space:nowrap}}
 .sa{{font-size:12px;font-weight:500;white-space:nowrap}}
@@ -357,7 +352,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
   <div class="hdr">
     <div class="hdr-in">
       <div>
-        <h1>Daily Job Match Report</h1>
+        <h1>Daily Executive Job Match Report</h1>
         <p>Julary Yesudhas &nbsp;·&nbsp; {date_str} &nbsp;·&nbsp; VP / Sr. Director / Managing Director — Data, AI &amp; Platform Engineering</p>
       </div>
       <div class="kpis">
@@ -369,7 +364,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     </div>
   </div>
 
-  <div class="notice">Jobs first pass an executive-level + target-function title gate. Screening then ranks functional mandate, leadership scope, technical alignment, healthcare/domain fit, executive/business alignment, compensation and mismatch penalties. The score is prioritization, not interview probability; compensation affects ranking but does not remove a role.</div>
+  <div class="notice">Jobs pass an executive-level + target-function title gate, then rank by: functional mandate, leadership scope, technical alignment, healthcare/domain fit, business alignment, compensation, and mismatch penalties. Score is prioritization guidance, not interview probability.</div>
 
   <div class="ctrls">
     <div class="sw">
@@ -381,6 +376,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
       <button class="pill" onclick="setF('high',this)">90+ Screen</button>
       <button class="pill" onclick="setF('salary',this)">Salary Listed</button>
       <button class="pill" onclick="setF('remote',this)">Remote</button>
+      <button class="pill" onclick="setF('applied',this)">Applied</button>
     </div>
   </div>
 
@@ -401,7 +397,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     <div class="empty" id="em">No roles match this filter.</div>
   </div>
 
-  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings scraped &nbsp;·&nbsp; {len(jobs_data)} relevant roles after filtering &nbsp;·&nbsp; Discovery floor: ${MIN_SCREEN_SCORE} screening points · Compensation used for ranking, not exclusion</div>
+  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings &nbsp;·&nbsp; {len(jobs_data)} after filtering &nbsp;·&nbsp; Sources: LinkedIn · Indeed · Google Jobs &nbsp;·&nbsp; Min screen score: {MIN_SCREEN_SCORE}</div>
 </div>
 <script>
 const APPLIED={applied_js};
@@ -411,6 +407,7 @@ let flt='all',sk='score',sd=-1;
 function bc(s){{return s>=95?'b4':s>=90?'b3':s>=87?'b2':'b1';}}
 function bcolor(s){{return s>=95?'#16a34a':s>=90?'#2563eb':s>=87?'#d97706':'#9ca3af';}}
 function bw(s){{return Math.max(0,Math.min(s,100));}}
+function isApplied(j){{return APPLIED.some(a=>j.company.toLowerCase().includes(a.company.toLowerCase())&&j.title.toLowerCase().includes(a.title.toLowerCase()));}}
 
 function setF(f,btn){{flt=f;document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));btn.classList.add('on');render();}}
 function srt(k){{sk===k?sd*=-1:(sk=k,sd=-1);render();}}
@@ -421,6 +418,7 @@ function render(){{
   if(flt==='high') list=list.filter(j=>j.score>=90);
   else if(flt==='salary') list=list.filter(j=>j.salval>0);
   else if(flt==='remote') list=list.filter(j=>j.location.toLowerCase().includes('remote'));
+  else if(flt==='applied') list=list.filter(j=>isApplied(j));
   if(q) list=list.filter(j=>j.title.toLowerCase().includes(q)||j.company.toLowerCase().includes(q));
   list.sort((a,b)=>{{
     let av=a[sk],bv=b[sk];
@@ -435,15 +433,22 @@ function render(){{
   em.style.display='none';
   list.forEach(j=>{{
     const cl=bc(j.score),bwv=bw(j.score),bclr=bcolor(j.score);
-    const isAp=APPLIED.some(a=>j.company.toLowerCase().includes(a.company.toLowerCase())&&j.title.toLowerCase().includes(a.title.toLowerCase()));
+    const ap=isApplied(j);
     const tr=document.createElement('tr');
-    if(isAp) tr.className='arow';
+    if(ap) tr.className='arow';
     tr.innerHTML=`
-      <td class="rc"><div class="rt"><a href="${{j.url}}" target="_blank" rel="noopener">${{j.title}}</a></div><div class="co">${{j.company}}</div></td>
+      <td class="rc">
+        <div class="rt"><a href="${{j.url}}" target="_blank" rel="noopener">${{j.title}}</a></div>
+        <div class="co">${{j.company}}</div>
+        <div class="fn">${{j.function}}</div>
+      </td>
       <td class="lo">${{j.location}}</td>
       <td class="dt">${{j.date}}</td>
       <td class="sa ${{j.salval>0?'k':'u'}}">${{j.salary}}</td>
-      <td><span class="badge ${{cl}}"><span class="bd"></span>${{j.score}}</span><span class="sbar"><span class="sfill" style="width:${{bwv}}%;background:${{bclr}}"></span></span></td>
+      <td>
+        <span class="badge ${{cl}}"><span class="bd"></span>${{j.score}}</span>
+        <span class="sbar"><span class="sfill" style="width:${{bwv}}%;background:${{bclr}}"></span></span>
+      </td>
       <td><a class="abtn" href="${{j.url}}" target="_blank" rel="noopener">Apply →</a></td>
     `;
     tb.appendChild(tr);
@@ -462,7 +467,7 @@ render();
 def run_job_search():
     date_str  = datetime.now().strftime("%B %d, %Y")
     file_date = datetime.now().strftime("%Y-%m-%d")
-    print(f"[{datetime.now()}] Starting daily leadership job pull...")
+    print(f"[{datetime.now()}] Starting daily executive job pull...")
 
     queries = [
         "Senior Director Data Engineering",
@@ -496,22 +501,22 @@ def run_job_search():
         try:
             print(f"  Searching: {query}")
             jobs = scrape_jobs(
-                site_name=["linkedin", "indeed"],
+                site_name=["linkedin", "indeed", "google"],
                 search_term=query,
-                google_search_term=f"{query} jobs United States last 24 hours",
+                google_search_term=f"{query} jobs near United States",
                 location="United States",
                 is_remote=True,
-                results_wanted=20,
+                results_wanted=15,
                 hours_old=24,
-                country_hosted="USA"
+                country_hosted="USA",
             )
             if not jobs.empty:
                 all_jobs.append(jobs)
         except Exception as e:
-            print(f"  Error: '{query}': {e}")
+            print(f"  Warning on query '{query}': {e}")
 
     if not all_jobs:
-        print("No jobs found.")
+        print("No jobs retrieved during this run.")
         return
 
     combined  = pd.concat(all_jobs, ignore_index=True)
@@ -519,7 +524,9 @@ def run_job_search():
     combined  = combined.drop_duplicates(subset=["title", "company"])
 
     if "date_posted" in combined.columns:
-        combined["date_posted"] = pd.to_datetime(combined["date_posted"], utc=True, errors="coerce")
+        combined["date_posted"] = pd.to_datetime(
+            combined["date_posted"], utc=True, errors="coerce"
+        )
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         combined = combined[
             (combined["date_posted"] >= cutoff) | (combined["date_posted"].isna())
@@ -527,6 +534,10 @@ def run_job_search():
 
     combined = combined[combined["title"].apply(filter_by_title)]
     combined = combined[combined.apply(salary_passes, axis=1)]
+
+    if combined.empty:
+        print("No relevant roles remaining after title filtering.")
+        return
 
     desc_col = "description" if "description" in combined.columns else None
 
@@ -538,26 +549,26 @@ def run_job_search():
             r.get("max_amount"),
         )
         return pd.Series({
-            "screening_score": result["score"],
+            "screening_score":  result["score"],
             "primary_function": result["primary_function"],
-            "screening_tier": screening_tier(result["score"]),
+            "screening_tier":   screening_tier(result["score"]),
             "score_components": json.dumps(result["components"]),
-            "penalties": ", ".join(result["penalties"]),
+            "penalties":        ", ".join(result["penalties"]),
         })
 
-    scored = combined.apply(evaluate_row, axis=1)
+    scored   = combined.apply(evaluate_row, axis=1)
     combined = pd.concat([combined, scored], axis=1)
     combined = combined[combined["screening_score"] >= MIN_SCREEN_SCORE]
     combined = combined.sort_values("screening_score", ascending=False)
 
-    # Build jobs list
     jobs_data = []
     for _, r in combined.iterrows():
         jobs_data.append({
             "title":    str(r.get("title", "")),
             "company":  str(r.get("company", "Unknown")),
             "location": clean_location(r.get("location", "")),
-            "date":     str(r.get("date_posted", "Today"))[:10] if pd.notna(r.get("date_posted")) else "Today",
+            "date":     str(r.get("date_posted", "Today"))[:10]
+                        if pd.notna(r.get("date_posted")) else "Today",
             "salary":   salary_str(r),
             "salval":   salary_val(r),
             "score":    int(r["screening_score"]),
@@ -567,13 +578,13 @@ def run_job_search():
             "url":      str(r.get("job_url", "#")),
         })
 
-    # Save HTML report
+    # HTML report
     html      = generate_html_report(jobs_data, date_str, total_raw)
     html_file = f"job_report_{file_date}.html"
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html)
 
-    # Save CSV (backup)
+    # CSV backup
     csv_file  = f"leadership_jobs_{file_date}.csv"
     keep_cols = ["title", "company", "location", "date_posted", "job_url",
                  "min_amount", "max_amount", "screening_score",
