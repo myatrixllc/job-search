@@ -2,10 +2,9 @@ name: Daily Job Match Report
 
 on:
   schedule:
-    # Runs at 6:00 AM UTC every day
-    # Adjust for your timezone: 6am CST = 12:00 UTC, 6am CDT = 11:00 UTC
-    - cron: '0 11 * * *'
-  workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
+    # 6:00 AM CST = 12:00 UTC | 6:00 AM CDT = 11:00 UTC
+    - cron: '0 12 * * *'
+  workflow_dispatch:
 
 jobs:
   run-job-report:
@@ -13,26 +12,21 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.11'
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install jobspy pandas python-dotenv
 
       - name: Run job scraper and generate report
         run: python fetch_jobs.py
+        continue-on-error: true
 
       - name: Send email report
         env:
@@ -44,10 +38,11 @@ jobs:
         run: python send_report.py
 
       - name: Upload report as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: job-report-${{ github.run_id }}
           path: |
             job_report_*.html
             leadership_jobs_*.csv
           retention-days: 30
+        if: always()
