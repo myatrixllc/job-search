@@ -14,12 +14,33 @@ TITLE_INCLUDE = [
     "executive director", "avp", "assistant vice president"
 ]
 
+# A role must have both executive seniority AND a target function in its title.
+# This prevents generic "Head of", VP Product, GRC, operational risk, etc.
+# from entering the scoring engine merely because the description contains data/AI terms.
+TARGET_TITLE_FUNCTIONS = [
+    "data", "analytics", "artificial intelligence", " ai ", "ai/",
+    "machine learning", "ml ", "software engineering", "engineering",
+    "platform", "enterprise architecture", "architecture", "cloud",
+    "technology architecture", "digital technology"
+]
+
 TITLE_EXCLUDE = [
-    "sales", "marketing", "human resources", "recruiter", "account manager",
-    "business development", "legal", "supply chain", "radiolog", "nursing",
-    "physician", "claims adjuster", "customer success", "account executive",
-    "channel partner", "alliances", "chief information security officer",
-    "ciso", "penetration testing"
+    "sales", "marketing", "finance", "human resources", "recruiter",
+    "account manager", "business development", "legal", "supply chain",
+    "radiolog", "nursing", "physician", "claims adjuster", "customer success",
+    "account executive", "channel partner", "alliances",
+
+    # Product-management roles are not part of the primary search.
+    "product manager", "product management", "digital product",
+
+    # Security / risk / compliance leadership is outside the target mandate.
+    "grc", "governance, risk", "risk and compliance", "operational risk",
+    "security officer", "information security", "cybersecurity",
+    "chief information security officer", "ciso", "penetration testing",
+
+    # Other recurring false-positive domains.
+    "actuar", "underwr", "quantitative", "reinsurance", "retail media",
+    "catastrophe", "real-world evidence", "google coe"
 ]
 
 TARGET_BASE = 240000
@@ -131,8 +152,15 @@ APPLIED_ROLES = [
 def filter_by_title(title):
     if not title:
         return False
-    t = title.lower()
-    return any(k in t for k in TITLE_INCLUDE) and not any(k in t for k in TITLE_EXCLUDE)
+
+    # Padding helps short tokens such as " ai " avoid matching unrelated words.
+    t = f" {title.lower().strip()} "
+
+    has_level = any(k in t for k in TITLE_INCLUDE)
+    has_target_function = any(k in t for k in TARGET_TITLE_FUNCTIONS)
+    is_excluded = any(k in t for k in TITLE_EXCLUDE)
+
+    return has_level and has_target_function and not is_excluded
 
 def count_matches(text, keywords):
     return sum(1 for k in keywords if k in text)
@@ -341,7 +369,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     </div>
   </div>
 
-  <div class="notice">Screening score combines functional mandate, leadership scope, technical alignment, healthcare/domain fit, executive/business alignment, compensation and mismatch penalties. It is an automated prioritization score, not an interview probability. Compensation affects ranking but does not remove an otherwise relevant role.</div>
+  <div class="notice">Jobs first pass an executive-level + target-function title gate. Screening then ranks functional mandate, leadership scope, technical alignment, healthcare/domain fit, executive/business alignment, compensation and mismatch penalties. The score is prioritization, not interview probability; compensation affects ranking but does not remove a role.</div>
 
   <div class="ctrls">
     <div class="sw">
