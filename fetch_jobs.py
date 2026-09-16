@@ -22,22 +22,21 @@ TARGET_TITLE_FUNCTIONS = [
 ]
 
 TITLE_EXCLUDE = [
-    "sales", "marketing", "finance", "human resources", "recruiter",
-    "account manager", "business development", "legal", "supply chain",
-    "radiolog", "nursing", "physician", "claims adjuster", "customer success",
-    "account executive", "channel partner", "alliances",
-    "product manager", "product management", "digital product",
-    "grc", "governance, risk", "risk and compliance", "operational risk",
-    "security officer", "information security", "cybersecurity",
-    "chief information security officer", "ciso", "penetration testing",
-    "actuar", "underwr", "quantitative", "reinsurance", "retail media",
-    "catastrophe", "real-world evidence", "google coe"
+    # Only obvious non-target professions are hard-excluded here.
+    # Other mismatches (product, security, risk, actuarial, etc.) are scored down
+    # rather than deleted before the description can be evaluated.
+    "sales", "marketing", "human resources", "recruiter",
+    "account manager", "business development", "legal",
+    "radiolog", "nursing", "physician", "claims adjuster",
+    "customer success", "account executive"
 ]
 
 TARGET_BASE       = 240000
 BACKUP_MAX_FLOOR  = 225000
-MIN_SCREEN_SCORE  = 45
+MIN_SCREEN_SCORE  = 0   # Diagnostic only; ranking determines the daily report
 HIGH_SCREEN_SCORE = 90
+MAX_REPORT_JOBS   = 10
+MIN_REPORT_JOBS   = 5
 
 LEVEL_SCORES = {
     "associate managing director": 15, "managing director": 15,
@@ -102,6 +101,18 @@ BUSINESS_KEYWORDS = [
 ]
 
 PENALTY_GROUPS = {
+    "Product Management": (28, [
+        "product manager", "product management", "digital product",
+        "product portfolio", "product-led"]),
+    "GRC / Operational Risk": (30, [
+        "grc", "governance, risk", "risk and compliance",
+        "operational risk", "technology risk"]),
+    "Broad Security Leadership": (25, [
+        "information security", "cybersecurity", "authentication",
+        "identity security", "security engineering"]),
+    "Actuarial / Underwriting": (30, [
+        "actuarial", "actuary", "underwriting", "underwriter",
+        "reinsurance", "catastrophe modeling"]),
     "Quantitative / Actuarial DS": (20, [
         "actuarial credential", "actuary", "probability engine",
         "advanced mathematical", "advanced statistical", "quantitative research",
@@ -152,10 +163,9 @@ def filter_by_title(title):
     if not title or not isinstance(title, str):
         return False
     t = f" {title.lower().strip()} "
-    has_level          = any(k in t for k in TITLE_INCLUDE)
-    has_target_function = any(k in t for k in TARGET_TITLE_FUNCTIONS)
-    is_excluded        = any(k in t for k in TITLE_EXCLUDE)
-    return has_level and has_target_function and not is_excluded
+    has_level = any(k in t for k in TITLE_INCLUDE)
+    is_hard_excluded = any(k in t for k in TITLE_EXCLUDE)
+    return has_level and not is_hard_excluded
 
 
 def count_matches(text, keywords):
@@ -364,7 +374,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     </div>
   </div>
 
-  <div class="notice">Jobs pass an executive-level + target-function title gate, then rank by: functional mandate, leadership scope, technical alignment, healthcare/domain fit, business alignment, compensation, and mismatch penalties. Score is prioritization guidance, not interview probability.</div>
+  <div class="notice">Executive-level roles are broadly discovered, then rank by: functional mandate, leadership scope, technical alignment, healthcare/domain fit, business alignment, compensation, and mismatch penalties. Score is prioritization guidance, not interview probability.</div>
 
   <div class="ctrls">
     <div class="sw">
@@ -397,7 +407,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     <div class="empty" id="em">No roles match this filter.</div>
   </div>
 
-  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings &nbsp;·&nbsp; {len(jobs_data)} after filtering &nbsp;·&nbsp; Sources: LinkedIn · Indeed · Google Jobs &nbsp;·&nbsp; Min screen score: {MIN_SCREEN_SCORE}</div>
+  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings &nbsp;·&nbsp; {len(jobs_data)} after filtering &nbsp;·&nbsp; Sources: LinkedIn · Indeed · Google Jobs &nbsp;·&nbsp; Daily report: Top {MAX_REPORT_JOBS} ranked roles</div>
 </div>
 <script>
 const APPLIED={applied_js};
@@ -470,30 +480,54 @@ def run_job_search():
     print(f"[{datetime.now()}] Starting daily executive job pull...")
 
     queries = [
+        # Primary Senior Director searches
         "Senior Director Data Engineering",
-        "Senior Director Enterprise Data Platforms",
-        "Senior Director Data Platform Engineering",
+        "Senior Director Data Platforms",
+        "Senior Director Enterprise Data",
         "Senior Director Data Architecture",
+        "Senior Director Data Analytics",
+        "Senior Director Analytics Engineering",
         "Senior Director Platform Engineering",
         "Senior Director Software Engineering",
-        "Senior Director Data Analytics",
-        "Senior Director Data AI Engineering",
-        "Senior Director Cloud Data Platforms",
+        "Senior Director Cloud Platforms",
         "Senior Director Enterprise Architecture",
+        "Senior Director Technology Architecture",
+        "Senior Director Data AI",
+        "Senior Director AI Engineering",
+        "Senior Director Technology Transformation",
+
+        # VP / Head searches
         "Vice President Data Engineering",
         "Vice President Data Platforms",
+        "Vice President Enterprise Data",
         "Vice President Data Analytics",
         "Vice President Platform Engineering",
         "Vice President Software Engineering",
+        "Vice President Enterprise Architecture",
         "Vice President Data AI",
+        "Vice President AI Engineering",
+        "Vice President Technology Transformation",
         "Head of Data Engineering",
         "Head of Data Platforms",
+        "Head of Data Analytics",
         "Head of Platform Engineering",
+        "Head of Enterprise Architecture",
+
+        # Managing Director / AVP searches
         "Managing Director Data Engineering",
         "Managing Director Data Platforms",
         "Managing Director Data Analytics",
+        "Managing Director Technology",
         "AVP Data Engineering",
         "AVP Data Platforms",
+        "AVP Data Analytics",
+        "AVP Platform Engineering",
+
+        # Selective Director backup searches
+        "Director Enterprise Data Platform",
+        "Director Data Engineering Healthcare",
+        "Director Data Architecture Healthcare",
+        "Director Data Analytics Healthcare",
     ]
 
     all_jobs = []
@@ -506,7 +540,7 @@ def run_job_search():
                 google_search_term=f"{query} jobs near United States",
                 location="United States",
                 is_remote=True,
-                results_wanted=15,
+                results_wanted=30,
                 hours_old=24,
                 country_hosted="USA",
             )
@@ -558,8 +592,17 @@ def run_job_search():
 
     scored   = combined.apply(evaluate_row, axis=1)
     combined = pd.concat([combined, scored], axis=1)
-    combined = combined[combined["screening_score"] >= MIN_SCREEN_SCORE]
-    combined = combined.sort_values("screening_score", ascending=False)
+
+    # Keep a complete diagnostic copy before limiting the emailed report.
+    all_screened = combined.sort_values(
+        ["screening_score", "date_posted"],
+        ascending=[False, False],
+        na_position="last"
+    ).copy()
+
+    # The daily email is intentionally concise: the 10 best roles available.
+    # No arbitrary score threshold can cause a zero-result day.
+    combined = all_screened.head(MAX_REPORT_JOBS).copy()
 
     jobs_data = []
     for _, r in combined.iterrows():
@@ -593,10 +636,15 @@ def run_job_search():
     keep_cols = [c for c in keep_cols if c in combined.columns]
     combined[keep_cols].to_csv(csv_file, index=False)
 
+    diagnostic_file = f"all_screened_jobs_{file_date}.csv"
+    diagnostic_cols = [c for c in keep_cols if c in all_screened.columns]
+    all_screened[diagnostic_cols].to_csv(diagnostic_file, index=False)
+
     print(f"\n{'='*52}")
     print(f"  {len(jobs_data)} relevant roles from {total_raw} raw listings")
     print(f"  HTML report : {html_file}")
-    print(f"  CSV backup  : {csv_file}")
+    print(f"  Top-10 CSV  : {csv_file}")
+    print(f"  Diagnostic  : {diagnostic_file}")
     print(f"{'='*52}")
 
     print("\nTop 10 screening results:")
