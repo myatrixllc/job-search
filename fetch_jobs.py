@@ -5,106 +5,220 @@ import json
 import os
 
 # ─────────────────────────────────────────────
-# FILTER CONFIGURATION
+# FILTER / PROFILE-AWARE SCREENING CONFIGURATION
 # ─────────────────────────────────────────────
 
 TITLE_INCLUDE = [
-    "vice president", "vp", "managing director", "senior director",
-    "sr. director", "sr director", "head of", "executive director", "avp"
+    "vice president", "vp", "managing director", "associate managing director",
+    "senior director", "sr. director", "sr director", "head of",
+    "executive director", "avp", "assistant vice president"
 ]
 
 TITLE_EXCLUDE = [
-    "sales", "marketing", "finance", "hr", "human resources",
-    "product manager", "recruiter", "account manager", "operations manager",
-    "business development", "clinical", "medical", "legal", "supply chain",
-    "sap", "google coe", "delivery lead", "reinsurance", "retail media",
-    "catastrophe", "real-world evidence", "radiolog", "nursing", "physician",
-    "grc", "governance, risk", "risk and compliance", "security officer",
-    "information security", "cybersecurity", "ciso", "penetration",
-    "quant", "quantitative", "actuar", "underwr", "claims adjuster",
-    "product management", "customer success", "account executive",
-    "global systems integrator", "channel partner", "alliances"
+    "sales", "marketing", "human resources", "recruiter", "account manager",
+    "business development", "legal", "supply chain", "radiolog", "nursing",
+    "physician", "claims adjuster", "customer success", "account executive",
+    "channel partner", "alliances", "chief information security officer",
+    "ciso", "penetration testing"
 ]
 
-DOMAIN_KEYWORDS = [
-    "data platform", "data engineering", "enterprise data", "data architecture",
-    "data strategy", "data governance", "ai", "genai", "generative ai",
-    "machine learning", "mlops", "databricks", "snowflake", "lakehouse",
-    "cloud data", "aws", "gcp", "platform engineering", "software engineering",
-    "healthcare", "health plan", "payer", "fhir", "hl7", "interoperability",
-    "data products", "analytics", "data science", "data infrastructure",
-    "semantic", "rag", "llm", "agentic", "responsible ai",
-    "data management", "data architect", "artificial intelligence",
-    "data analytics", "intelligence", "telemetry"
+TARGET_BASE = 240000
+BACKUP_MAX_FLOOR = 225000
+MIN_SCREEN_SCORE = 70
+HIGH_SCREEN_SCORE = 90
+
+LEVEL_SCORES = {
+    "associate managing director": 15, "managing director": 15,
+    "vice president": 15, "vp": 15, "head of": 15,
+    "senior director": 15, "sr. director": 15, "sr director": 15,
+    "assistant vice president": 14, "avp": 14, "executive director": 13,
+}
+
+FUNCTION_GROUPS = {
+    "Data Platform / Engineering": (25, [
+        "data platform", "enterprise data platform", "data engineering",
+        "data infrastructure", "cloud data platform", "lakehouse",
+        "data architecture", "platform engineering"]),
+    "Enterprise Data": (24, [
+        "enterprise data strategy", "data strategy", "enterprise data",
+        "data transformation", "data modernization", "data management",
+        "data governance"]),
+    "Software / Platform": (23, [
+        "software engineering", "platform engineering", "software platform",
+        "cloud platform", "api platform", "engineering organization"]),
+    "Analytics": (20, [
+        "analytics engineering", "data analytics", "business intelligence",
+        "enterprise analytics", "reporting", "dashboard", "semantic layer",
+        "semantic model"]),
+    "AI Platform": (20, [
+        "ai platform", "ai engineering", "ai enablement", "generative ai",
+        "genai", "rag", "mlops", "llmops", "agentic ai", "responsible ai"]),
+    "Enterprise Architecture": (23, [
+        "enterprise architecture", "solution architecture", "platform architecture",
+        "technology architecture", "architecture strategy", "reference architecture"]),
+}
+
+LEADERSHIP_KEYWORDS = [
+    "lead team", "lead teams", "leading teams", "build and lead", "manage team",
+    "manage teams", "organization", "organizational leadership", "global team",
+    "distributed team", "executive leadership", "senior leadership",
+    "develop leaders", "mentor leaders", "budget", "portfolio", "investment",
+    "vendor", "strategic partner", "build-vs-buy", "build vs buy"
 ]
 
-MIN_SCORE   = 1
-MIN_SALARY  = 180000
+TECH_KEYWORDS = [
+    "snowflake", "databricks", "spark", "aws", "gcp", "google cloud",
+    "lakehouse", "hadoop", "cloudera", "kafka", "cdc", "etl", "elt", "api",
+    "microservices", "data modeling", "semantic", "observability", "ci/cd",
+    "devsecops", "data quality", "metadata", "lineage", "mdm", "data products"
+]
 
-# Companies already applied to — shown with a checkmark in the report
-APPLIED_COMPANIES = [
-    "WEX", "TIAA", "Optum", "Vituity", "Devoted Health",
-    "Abbott", "Experian", "SCA Health"
+HEALTHCARE_KEYWORDS = [
+    "healthcare", "health plan", "health insurance", "payer", "claims", "member",
+    "provider", "fhir", "hl7", "interoperability", "medicare", "medicaid",
+    "revenue cycle", "835", "837", "270", "271", "ehr", "emr"
+]
+
+BUSINESS_KEYWORDS = [
+    "business value", "business outcome", "executive stakeholder",
+    "senior stakeholder", "strategic roadmap", "multi-year roadmap",
+    "investment prioritization", "portfolio management", "business case",
+    "cost-benefit", "roi", "operating model", "organizational change",
+    "transformation"
+]
+
+PENALTY_GROUPS = {
+    "Quantitative / Actuarial DS": (20, [
+        "actuarial credential", "actuary", "probability engine",
+        "advanced mathematical", "advanced statistical", "quantitative research",
+        "statistical theory"]),
+    "Security Leadership": (30, [
+        "chief information security", "security officer", "penetration testing",
+        "cybersecurity operations", "security operations center"]),
+    "Sales / Origination": (35, [
+        "sales quota", "revenue quota", "book of business", "sales pipeline",
+        "business development quota", "quota carrying"]),
+    "Manufacturing Engineering": (35, [
+        "manufacturing engineering", "mechanical engineering",
+        "facilities engineering", "plant engineering", "packaging engineering",
+        "maintenance engineering"]),
+    "Microsoft Stack Hard Requirement": (12, [
+        "extensive experience with microsoft fabric",
+        "deep expertise in microsoft fabric", "expertise in microsoft fabric",
+        "fabric migration experience required", "azure data factory required",
+        "power bi required"]),
+    "ERP Hard Requirement": (12, [
+        "5+ years of erp", "five years of erp",
+        "extensive erp experience required", "jd edwards experience required",
+        "sap experience required"]),
+    "Individual Contributor": (18, [
+        "individual contributor role", "no direct reports",
+        "hands-on individual contributor", "principal engineer role",
+        "staff engineer role"]),
+}
+
+APPLIED_ROLES = [
+    {"company": "McDonald's", "title": "Senior Director, Enterprise Architecture"},
+    {"company": "Vituity", "title": "Senior Director, Platform Engineering"},
+    {"company": "Experian", "title": "Senior Director, Platform Architecture"},
+    {"company": "Revecore", "title": "Senior Director, Enterprise Data Architecture"},
 ]
 
 # ─────────────────────────────────────────────
-# FILTER FUNCTIONS
+# FILTER / SCORING FUNCTIONS
 # ─────────────────────────────────────────────
 
 def filter_by_title(title):
     if not title:
         return False
     t = title.lower()
-    has_level   = any(kw in t for kw in TITLE_INCLUDE)
-    is_excluded = any(kw in t for kw in TITLE_EXCLUDE)
-    return has_level and not is_excluded
+    return any(k in t for k in TITLE_INCLUDE) and not any(k in t for k in TITLE_EXCLUDE)
 
+def count_matches(text, keywords):
+    return sum(1 for k in keywords if k in text)
 
-def score_role(title, description):
-    t = (title or "").lower()
-    d = description.lower() if isinstance(description, str) else ""
-    combined = t + " " + d
-    return sum(1 for kw in DOMAIN_KEYWORDS if kw in combined)
+def score_role(title, description, min_salary=None, max_salary=None):
+    title = (title or "").lower()
+    desc = description.lower() if isinstance(description, str) else ""
+    text = f"{title} {desc}"
+    c = {}
 
+    c["seniority"] = max(
+        [pts for level, pts in LEVEL_SCORES.items() if level in title] or [0]
+    )
+
+    fs = []
+    for name, (weight, keywords) in FUNCTION_GROUPS.items():
+        hits = count_matches(text, keywords)
+        if hits:
+            fs.append((name, round(weight * min(hits / 3.0, 1.0))))
+    fs.sort(key=lambda x: x[1], reverse=True)
+    if fs:
+        c["function"] = min(25, round(fs[0][1] + (fs[1][1] * .20 if len(fs) > 1 else 0)))
+        primary = fs[0][0]
+    else:
+        c["function"], primary = 0, "Other / Unknown"
+
+    c["leadership"] = min(15, count_matches(text, LEADERSHIP_KEYWORDS) * 3)
+    c["technical"] = min(15, round(count_matches(text, TECH_KEYWORDS) * 1.5))
+    c["domain"] = min(10, count_matches(text, HEALTHCARE_KEYWORDS) * 2)
+    c["business"] = min(10, count_matches(text, BUSINESS_KEYWORDS) * 2)
+
+    comp = 5
+    if pd.notna(max_salary):
+        if max_salary >= 280000: comp = 10
+        elif max_salary >= 260000: comp = 9
+        elif max_salary >= 240000: comp = 8
+        elif max_salary >= 225000: comp = 4
+        else: comp = 0
+    c["compensation"] = comp
+
+    penalties, penalty_total = [], 0
+    for name, (penalty, keywords) in PENALTY_GROUPS.items():
+        if any(k in text for k in keywords):
+            penalties.append(name)
+            penalty_total += penalty
+
+    return {
+        "score": max(0, min(100, sum(c.values()) - penalty_total)),
+        "primary_function": primary,
+        "components": c,
+        "penalties": penalties,
+    }
+
+def screening_tier(score):
+    if score >= 95: return "A+ | REVIEW NOW"
+    if score >= 90: return "A | STRONG REVIEW"
+    if score >= 87: return "B | SELECTIVE"
+    return "C | BACKUP"
 
 def salary_str(row):
-    mn = row.get("min_amount")
-    mx = row.get("max_amount")
-    if pd.notna(mn) and pd.notna(mx):
-        return f"${int(mn):,} – ${int(mx):,}"
-    elif pd.notna(mn):
-        return f"${int(mn):,}+"
-    elif pd.notna(mx):
-        return f"up to ${int(mx):,}"
+    mn, mx = row.get("min_amount"), row.get("max_amount")
+    if pd.notna(mn) and pd.notna(mx): return f"${int(mn):,} – ${int(mx):,}"
+    if pd.notna(mn): return f"${int(mn):,}+"
+    if pd.notna(mx): return f"up to ${int(mx):,}"
     return "Not listed"
 
-
 def salary_val(row):
-    mn = row.get("min_amount")
-    return int(mn) if pd.notna(mn) else 0
-
+    mx, mn = row.get("max_amount"), row.get("min_amount")
+    if pd.notna(mx): return int(mx)
+    if pd.notna(mn): return int(mn)
+    return 0
 
 def salary_passes(row):
-    mn = row.get("min_amount")
     mx = row.get("max_amount")
-    if pd.notna(mn) and mn < MIN_SALARY:
-        return False
-    if pd.notna(mx) and mx < MIN_SALARY:
-        return False
-    return True
+    return True if pd.isna(mx) else mx >= BACKUP_MAX_FLOOR
 
-
-def match_pct(score):
-    return min(int(score / 8 * 100), 100)
-
+def already_applied(company, title):
+    company, title = (company or "").lower(), (title or "").lower()
+    return any(r["company"].lower() in company and r["title"].lower() in title
+               for r in APPLIED_ROLES)
 
 def clean_location(loc):
     if not isinstance(loc, str) or loc.strip().lower() in ("nan", ""):
         return "Remote / Not listed"
     parts = loc.split(",")
-    if len(parts) >= 2:
-        return f"{parts[0].strip()}, {parts[1].strip()}"
-    return loc.strip()
+    return f"{parts[0].strip()}, {parts[1].strip()}" if len(parts) >= 2 else loc.strip()
 
 
 # ─────────────────────────────────────────────
@@ -112,9 +226,9 @@ def clean_location(loc):
 # ─────────────────────────────────────────────
 
 def generate_html_report(jobs_data, date_str, total_raw):
-    high       = sum(1 for j in jobs_data if j["score"] >= 5)
+    high       = sum(1 for j in jobs_data if j["score"] >= HIGH_SCREEN_SCORE)
     with_sal   = sum(1 for j in jobs_data if j["salval"] > 0)
-    applied_js = json.dumps(APPLIED_COMPANIES)
+    applied_js = json.dumps(APPLIED_ROLES)
     jobs_js    = json.dumps(jobs_data, ensure_ascii=False)
 
     return f"""<!DOCTYPE html>
@@ -219,13 +333,13 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
       <div class="kpis">
         <div class="kpi"><span class="kpi-n">{total_raw}</span><span class="kpi-l">Pulled</span></div>
         <div class="kpi"><span class="kpi-n" id="kn">{len(jobs_data)}</span><span class="kpi-l">Showing</span></div>
-        <div class="kpi"><span class="kpi-n">{high}</span><span class="kpi-l">High Match</span></div>
+        <div class="kpi"><span class="kpi-n">{high}</span><span class="kpi-l">90+ Screen</span></div>
         <div class="kpi"><span class="kpi-n">{with_sal}</span><span class="kpi-l">Salary Listed</span></div>
       </div>
     </div>
   </div>
 
-  <div class="notice">Match score is based on title + description keyword relevance to your target profile (Data, AI, Platform Engineering leadership). Roles with known salary below ${MIN_SALARY:,} are excluded.</div>
+  <div class="notice">Screening score combines functional mandate, leadership scope, technical alignment, healthcare/domain fit, executive/business alignment, compensation and mismatch penalties. It is an automated prioritization score, not an interview probability. Roles with a known maximum salary below ${BACKUP_MAX_FLOOR:,} are excluded.</div>
 
   <div class="ctrls">
     <div class="sw">
@@ -234,7 +348,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     </div>
     <div class="pills">
       <button class="pill on" onclick="setF('all',this)">All</button>
-      <button class="pill" onclick="setF('high',this)">High Match</button>
+      <button class="pill" onclick="setF('high',this)">90+ Screen</button>
       <button class="pill" onclick="setF('salary',this)">Salary Listed</button>
       <button class="pill" onclick="setF('remote',this)">Remote</button>
     </div>
@@ -248,7 +362,7 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
           <th onclick="srt('location')">Location ↕</th>
           <th onclick="srt('date')">Posted ↕</th>
           <th onclick="srt('salval')">Salary ↕</th>
-          <th onclick="srt('score')">Match ↕</th>
+          <th onclick="srt('score')">Screen ↕</th>
           <th></th>
         </tr>
       </thead>
@@ -257,16 +371,16 @@ tr.arow .co::after{{content:" ✓ Applied";color:var(--green);font-size:10px;fon
     <div class="empty" id="em">No roles match this filter.</div>
   </div>
 
-  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings scraped &nbsp;·&nbsp; {len(jobs_data)} relevant roles after filtering &nbsp;·&nbsp; Min salary filter: ${MIN_SALARY:,}</div>
+  <div class="footer">Generated {date_str} &nbsp;·&nbsp; {total_raw} raw listings scraped &nbsp;·&nbsp; {len(jobs_data)} relevant roles after filtering &nbsp;·&nbsp; Known max salary floor: ${BACKUP_MAX_FLOOR:,}</div>
 </div>
 <script>
 const APPLIED={applied_js};
 const jobs={jobs_js};
 let flt='all',sk='score',sd=-1;
 
-function bc(s){{return s>=7?'b4':s>=5?'b3':s>=3?'b2':'b1';}}
-function bcolor(s){{return s>=7?'#16a34a':s>=5?'#2563eb':s>=3?'#d97706':'#9ca3af';}}
-function bw(s){{return Math.min(Math.round(s/8*100),100);}}
+function bc(s){{return s>=95?'b4':s>=90?'b3':s>=87?'b2':'b1';}}
+function bcolor(s){{return s>=95?'#16a34a':s>=90?'#2563eb':s>=87?'#d97706':'#9ca3af';}}
+function bw(s){{return Math.max(0,Math.min(s,100));}}
 
 function setF(f,btn){{flt=f;document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));btn.classList.add('on');render();}}
 function srt(k){{sk===k?sd*=-1:(sk=k,sd=-1);render();}}
@@ -274,7 +388,7 @@ function srt(k){{sk===k?sd*=-1:(sk=k,sd=-1);render();}}
 function render(){{
   const q=(document.getElementById('q').value||'').toLowerCase();
   let list=[...jobs];
-  if(flt==='high') list=list.filter(j=>j.score>=5);
+  if(flt==='high') list=list.filter(j=>j.score>=90);
   else if(flt==='salary') list=list.filter(j=>j.salval>0);
   else if(flt==='remote') list=list.filter(j=>j.location.toLowerCase().includes('remote'));
   if(q) list=list.filter(j=>j.title.toLowerCase().includes(q)||j.company.toLowerCase().includes(q));
@@ -291,7 +405,7 @@ function render(){{
   em.style.display='none';
   list.forEach(j=>{{
     const cl=bc(j.score),bwv=bw(j.score),bclr=bcolor(j.score);
-    const isAp=APPLIED.some(a=>j.company.includes(a)||j.title.includes(a));
+    const isAp=APPLIED.some(a=>j.company.toLowerCase().includes(a.company.toLowerCase())&&j.title.toLowerCase().includes(a.title.toLowerCase()));
     const tr=document.createElement('tr');
     if(isAp) tr.className='arow';
     tr.innerHTML=`
@@ -299,7 +413,7 @@ function render(){{
       <td class="lo">${{j.location}}</td>
       <td class="dt">${{j.date}}</td>
       <td class="sa ${{j.salval>0?'k':'u'}}">${{j.salary}}</td>
-      <td><span class="badge ${{cl}}"><span class="bd"></span>${{j.match}}%</span><span class="sbar"><span class="sfill" style="width:${{bwv}}%;background:${{bclr}}"></span></span></td>
+      <td><span class="badge ${{cl}}"><span class="bd"></span>${{j.score}}</span><span class="sbar"><span class="sfill" style="width:${{bwv}}%;background:${{bclr}}"></span></span></td>
       <td><a class="abtn" href="${{j.url}}" target="_blank" rel="noopener">Apply →</a></td>
     `;
     tb.appendChild(tr);
@@ -321,21 +435,30 @@ def run_job_search():
     print(f"[{datetime.now()}] Starting daily leadership job pull...")
 
     queries = [
-        "Vice President Data Engineering",
-        "VP Data Analytics",
-        "Senior Director Data Architecture",
-        "Director Enterprise Data",
-        "VP Software Engineering",
-        "Director Software Engineering",
-        "Head of Engineering",
-        "Head of Data",
-        "VP Data Analytics Engineering",
         "Senior Director Data Engineering",
-        "Executive Director Analytics Engineering",
-        "Vice President Artificial Intelligence",
-        "Senior Director AI Platform",
-        "VP Data Governance",
+        "Senior Director Enterprise Data Platforms",
+        "Senior Director Data Platform Engineering",
+        "Senior Director Data Architecture",
+        "Senior Director Platform Engineering",
+        "Senior Director Software Engineering",
+        "Senior Director Data Analytics",
+        "Senior Director Data AI Engineering",
+        "Senior Director Cloud Data Platforms",
+        "Senior Director Enterprise Architecture",
+        "Vice President Data Engineering",
+        "Vice President Data Platforms",
+        "Vice President Data Analytics",
+        "Vice President Platform Engineering",
+        "Vice President Software Engineering",
+        "Vice President Data AI",
+        "Head of Data Engineering",
+        "Head of Data Platforms",
+        "Head of Platform Engineering",
+        "Managing Director Data Engineering",
         "Managing Director Data Platforms",
+        "Managing Director Data Analytics",
+        "AVP Data Engineering",
+        "AVP Data Platforms",
     ]
 
     all_jobs = []
@@ -376,12 +499,26 @@ def run_job_search():
     combined = combined[combined.apply(salary_passes, axis=1)]
 
     desc_col = "description" if "description" in combined.columns else None
-    combined["relevance_score"] = combined.apply(
-        lambda r: score_role(r["title"], r.get(desc_col, "") if desc_col else ""),
-        axis=1
-    )
-    combined = combined[combined["relevance_score"] >= MIN_SCORE]
-    combined = combined.sort_values("relevance_score", ascending=False)
+
+    def evaluate_row(r):
+        result = score_role(
+            r.get("title", ""),
+            r.get(desc_col, "") if desc_col else "",
+            r.get("min_amount"),
+            r.get("max_amount"),
+        )
+        return pd.Series({
+            "screening_score": result["score"],
+            "primary_function": result["primary_function"],
+            "screening_tier": screening_tier(result["score"]),
+            "score_components": json.dumps(result["components"]),
+            "penalties": ", ".join(result["penalties"]),
+        })
+
+    scored = combined.apply(evaluate_row, axis=1)
+    combined = pd.concat([combined, scored], axis=1)
+    combined = combined[combined["screening_score"] >= MIN_SCREEN_SCORE]
+    combined = combined.sort_values("screening_score", ascending=False)
 
     # Build jobs list
     jobs_data = []
@@ -393,8 +530,10 @@ def run_job_search():
             "date":     str(r.get("date_posted", "Today"))[:10] if pd.notna(r.get("date_posted")) else "Today",
             "salary":   salary_str(r),
             "salval":   salary_val(r),
-            "match":    match_pct(int(r["relevance_score"])),
-            "score":    int(r["relevance_score"]),
+            "score":    int(r["screening_score"]),
+            "tier":     str(r.get("screening_tier", "")),
+            "function": str(r.get("primary_function", "")),
+            "penalties": str(r.get("penalties", "")),
             "url":      str(r.get("job_url", "#")),
         })
 
@@ -407,7 +546,9 @@ def run_job_search():
     # Save CSV (backup)
     csv_file  = f"leadership_jobs_{file_date}.csv"
     keep_cols = ["title", "company", "location", "date_posted", "job_url",
-                 "min_amount", "max_amount", "relevance_score"]
+                 "min_amount", "max_amount", "screening_score",
+                 "screening_tier", "primary_function", "penalties",
+                 "score_components"]
     keep_cols = [c for c in keep_cols if c in combined.columns]
     combined[keep_cols].to_csv(csv_file, index=False)
 
@@ -417,9 +558,9 @@ def run_job_search():
     print(f"  CSV backup  : {csv_file}")
     print(f"{'='*52}")
 
-    print("\nTop 10 matches:")
+    print("\nTop 10 screening results:")
     for j in jobs_data[:10]:
-        print(f"  [{j['match']}%] {j['title']} @ {j['company']} | {j['location']}")
+        print(f"  [{j['score']}] {j['tier']} | {j['title']} @ {j['company']} | {j['location']}")
 
 
 if __name__ == "__main__":
